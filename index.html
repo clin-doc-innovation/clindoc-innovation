@@ -301,7 +301,7 @@
         <div class="header-actions">
           <a href="https://sanofi.sharepoint.com/sites/clinical-documentation-innovation?e=1%3A61d30b11b8ce4a65a4879387c545874e"
              target="_blank" rel="noopener noreferrer" class="btn-header" title="Go to ClinDoc Innovation Home">
-            🏠 Home
+            🏠 ClinDoc Innovation Home Page
           </a>
         </div>
       </div>
@@ -480,7 +480,14 @@
             <!-- Category -->
             <div class="form-group" id="category-form-group">
               <label class="form-label" for="form-category-input">Category <span class="required" aria-label="required">*</span></label>
-              <input type="text" class="form-input" id="form-category-input" name="category" maxlength="30" placeholder="Type or pick a category…" required aria-required="true" aria-describedby="form-category-error" autocomplete="off"/>
+              <input type="text" class="form-input" id="form-category-input" name="category" maxlength="30" placeholder="Type or pick a category…" required aria-required="true" aria-describedby="form-category-error" autocomplete="off" list="category-datalist"/>
+              <datalist id="category-datalist">
+                <option value="Innovation"/>
+                <option value="Event"/>
+                <option value="Delivery"/>
+                <option value="People"/>
+                <option value="Metrics"/>
+              </datalist>
               <div class="form-error" id="form-category-error" role="alert"></div>
             </div>
             <!-- Image -->
@@ -584,6 +591,17 @@
       LS_CAT_COLORS:'clindoc_cat_colors',
       LS_DEVICE:    'clindoc_device_id',
       MAX_IMG:      204800,
+      // Fix 1: Predefined categories
+      DEFAULT_CATEGORIES: ['Innovation', 'Event', 'Delivery', 'People', 'Metrics'],
+      // Fix 4: Category images (emoji-based, stable per category)
+      CAT_IMAGES: {
+        'Innovation': ['💡','🔬','🧪','🚀','⚙️','🔭'],
+        'Event':      ['🎤','📅','🎪','🏟️','🎯','🎊'],
+        'Delivery':   ['📦','🚚','✅','🎁','📋','🏁'],
+        'People':     ['👥','🤝','🌟','🏆','💪','👏'],
+        'Metrics':    ['📊','📈','📉','🎯','📐','🔢'],
+      },
+      DEFAULT_CAT_IMAGE: ['🏆','✨','🎖️','⭐','🌟','🎗️'],
       MESSAGES: {
         0: "Plant your first seed of success! 🌱",
         1: "Great start! Your garden is growing! 🌿",
@@ -644,7 +662,7 @@
       if (!id) { id=uuid(); if(lsOk()) localStorage.setItem(CFG.LS_DEVICE,id); }
       return id;
     }
-    function defaultData() { return { version:CFG.VERSION, accomplishments:[], categories:[], people:[], monthlySnapshots:{}, settings:{lastBackup:null} }; }
+    function defaultData() { return { version:CFG.VERSION, accomplishments:[], categories:[...CFG.DEFAULT_CATEGORIES], people:[], monthlySnapshots:{}, settings:{lastBackup:null} }; }
     function validData(d)  { return d && typeof d==='object' && Array.isArray(d.accomplishments) && Array.isArray(d.categories) && Array.isArray(d.people); }
 
     /* ── Toast ────────────────────────────────────────────────── */
@@ -779,6 +797,13 @@
     /* ── Flower ───────────────────────────────────────────────── */
     function flowerStage(count) { return Math.min(count, 5); }
 
+    // Fix 9: Calculate how many full flowers (5 each) + current stage
+    function flowerGardenInfo(count) {
+      const fullFlowers = Math.floor(count / 5);
+      const remainder  = count % 5;
+      return { fullFlowers, currentStage: remainder, totalCount: count };
+    }
+
     function renderFlower(stage) {
       const get=id=>document.getElementById(id);
       const stem=get('stem'),lL=get('leaf-left'),lR=get('leaf-right'),bud=get('bud'),bloom=get('bloom');
@@ -818,13 +843,49 @@
     function updateFlower() {
       const monthAccs = DATA.accomplishments.filter(a=>a.date.startsWith(CURRENT_MONTH));
       const count     = monthAccs.length;
-      const stage     = flowerStage(count);
-      document.getElementById('flower-stage-label').textContent    = `Stage ${stage} / 5`;
-      document.getElementById('flower-progress-fill').style.width  = `${(stage/5)*100}%`;
-      document.getElementById('flower-message').textContent        = CFG.MESSAGES[stage] || CFG.MESSAGES[5];
+      const { fullFlowers, currentStage } = flowerGardenInfo(count);
+
+      // Fix 9: Show full garden info in label
+      if (fullFlowers > 0) {
+        document.getElementById('flower-stage-label').textContent = `🌸 ${fullFlowers} fleur${fullFlowers>1?'s':''} complète${fullFlowers>1?'s':''} + Stage ${currentStage} / 5`;
+      } else {
+        document.getElementById('flower-stage-label').textContent = `Stage ${currentStage} / 5`;
+      }
+
+      document.getElementById('flower-progress-fill').style.width  = `${(currentStage/5)*100}%`;
+      const msg = count >= 5 && currentStage === 0
+        ? `🌸 Jardin complet ! ${fullFlowers} fleur${fullFlowers>1?'s':''} épanouie${fullFlowers>1?'s':''} !`
+        : CFG.MESSAGES[currentStage] || CFG.MESSAGES[5];
+      document.getElementById('flower-message').textContent = msg;
       document.getElementById('stat-month-count').textContent      = count;
       document.getElementById('stat-total-count').textContent      = DATA.accomplishments.length;
-      renderFlower(stage);
+
+      // Fix 9: Render mini garden row showing past full flowers + current growing flower
+      renderGardenRow(fullFlowers, currentStage);
+      renderFlower(currentStage === 0 && fullFlowers > 0 ? 5 : currentStage);
+    }
+
+    // Fix 9: Render a row of mini flower icons for completed flowers
+    function renderGardenRow(fullFlowers, currentStage) {
+      let gardenEl = document.getElementById('flower-garden-row');
+      if (!gardenEl) {
+        gardenEl = document.createElement('div');
+        gardenEl.id = 'flower-garden-row';
+        gardenEl.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;justify-content:center;font-size:1.4rem;margin-top:4px;';
+        const flowerDisplay = document.getElementById('flower-display');
+        flowerDisplay.parentNode.insertBefore(gardenEl, flowerDisplay.nextSibling);
+      }
+      if (fullFlowers === 0) { gardenEl.style.display = 'none'; return; }
+      gardenEl.style.display = 'flex';
+      const flowerEmojis = ['🌸','🌺','🌼','💐','🌹'];
+      let html = '';
+      for (let i = 0; i < fullFlowers; i++) {
+        html += `<span title="Fleur ${i+1} complète (5 accomplissements)">${flowerEmojis[i % flowerEmojis.length]}</span>`;
+      }
+      if (currentStage > 0) {
+        html += `<span title="En cours (${currentStage}/5)" style="opacity:0.5">🌱</span>`;
+      }
+      gardenEl.innerHTML = html;
     }
 
     /* ── Monthly shelf ────────────────────────────────────────── */
@@ -847,25 +908,55 @@
       DATA.accomplishments.forEach(a=>months.add(a.date.substring(0,7)));
       Object.keys(DATA.monthlySnapshots).forEach(m=>months.add(m));
       const sorted = [...months].filter(m=>DATA.accomplishments.some(a=>a.date.startsWith(m))).sort().reverse();
-      if (!sorted.length) { container.innerHTML='<p style="color:var(--gray);text-align:center;padding:20px">No archived months yet</p>'; return; }
-      container.innerHTML = sorted.map(month=>{
+
+      // Fix 10: Track currently active month filter
+      const activeMonth = (FILTERS.dateFrom && FILTERS.dateTo) ? FILTERS.dateFrom.substring(0,7) : null;
+
+      const showAllBtn = `<div class="shelf-month${!activeMonth?' current':''}" role="listitem" tabindex="0" id="shelf-show-all" style="border-style:dashed;min-width:120px;"><div class="shelf-flower-mini">🔍</div><div class="shelf-month-name" style="font-size:0.8rem">Tout afficher</div></div>`;
+
+      if (!sorted.length) { container.innerHTML='<p style="color:var(--gray);text-align:center;padding:20px">Aucun mois archivé</p>'; return; }
+      container.innerHTML = showAllBtn + sorted.map(month=>{
         const isCur=month===CURRENT_MONTH;
+        const isActive=month===activeMonth;
         const count=DATA.accomplishments.filter(a=>a.date.startsWith(month)).length;
         const b=badge(count);
         const bHTML=b?`<div class="shelf-badge ${b}">${b==='gold'?'🥇':b==='silver'?'🥈':'🥉'}</div>`:'';
         const flower=count===0?'🪴':count>=5?'🌸':count>=4?'🌺':count>=3?'🌼':count>=2?'🌿':'🌱';
-        return `<div class="shelf-month${isCur?' current':''}" role="listitem" tabindex="0" data-month="${month}">${bHTML}<div class="shelf-month-name">${fmtMonth(month)}</div><div class="shelf-flower-mini">${flower}</div><div class="shelf-count">${count} accomplishment${count!==1?'s':''}</div></div>`;
+        return `<div class="shelf-month${isCur?' current':''}${isActive?' current':''}" role="listitem" tabindex="0" data-month="${month}">${bHTML}<div class="shelf-month-name">${fmtMonth(month)}</div><div class="shelf-flower-mini">${flower}</div><div class="shelf-count">${count} accomplishment${count!==1?'s':''}</div></div>`;
       }).join('');
-      container.querySelectorAll('.shelf-month').forEach(el=>{
+
+      // Fix 10: "Show all" clears date filter
+      const showAllEl = document.getElementById('shelf-show-all');
+      if (showAllEl) {
+        const clearAll = () => {
+          FILTERS.dateFrom = FILTERS.dateTo = '';
+          document.getElementById('filter-date-from').value = '';
+          document.getElementById('filter-date-to').value = '';
+          applyFilters(); renderFilterControls(); renderShelf();
+          document.getElementById('cards-section').scrollIntoView({behavior:'smooth'});
+        };
+        showAllEl.addEventListener('click', clearAll);
+        showAllEl.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();clearAll();} });
+      }
+
+      container.querySelectorAll('.shelf-month[data-month]').forEach(el=>{
         el.addEventListener('click',()=>{
           const m=el.dataset.month;
-          FILTERS.dateFrom=`${m}-01`;
-          FILTERS.dateTo=`${m}-${new Date(m.split('-')[0],+m.split('-')[1],0).getDate()}`;
-          document.getElementById('filter-date-from').value=FILTERS.dateFrom;
-          document.getElementById('filter-date-to').value=FILTERS.dateTo;
-          applyFilters(); renderFilterControls();
+          // Fix 10: clicking same month again clears the filter
+          if (activeMonth === m) {
+            FILTERS.dateFrom = FILTERS.dateTo = '';
+            document.getElementById('filter-date-from').value = '';
+            document.getElementById('filter-date-to').value = '';
+          } else {
+            FILTERS.dateFrom=`${m}-01`;
+            FILTERS.dateTo=`${m}-${new Date(m.split('-')[0],+m.split('-')[1],0).getDate()}`;
+            document.getElementById('filter-date-from').value=FILTERS.dateFrom;
+            document.getElementById('filter-date-to').value=FILTERS.dateTo;
+          }
+          applyFilters(); renderFilterControls(); renderShelf();
           document.getElementById('cards-section').scrollIntoView({behavior:'smooth'});
         });
+        el.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){e.preventDefault();el.click();} });
       });
     }
 
@@ -957,10 +1048,19 @@
         c.className='card'; c.setAttribute('role','listitem');
         const cat=getCatColor(acc.category);
 
-        // Image or placeholder
-        const imgHTML = acc.image
-          ? `<img src="${acc.image}" alt="${esc(acc.title)}" class="card-image" loading="lazy"/>`
-          : `<div class="card-image-placeholder">${['🎯','🚀','💡','⭐','🏆','✨'][Math.floor(Math.random()*6)]}</div>`;
+        // Fix 3: Stable image per record using id seed; Fix 4: category-based auto image
+        function seededIndex(str, len) {
+          let h=0; for(let i=0;i<str.length;i++) h=(h*31+str.charCodeAt(i))|0;
+          return Math.abs(h)%len;
+        }
+        let imgHTML;
+        if (acc.image) {
+          imgHTML = `<img src="${acc.image}" alt="${esc(acc.title)}" class="card-image" loading="lazy"/>`;
+        } else {
+          const catList = CFG.CAT_IMAGES[acc.category] || CFG.DEFAULT_CAT_IMAGE;
+          const emoji = catList[seededIndex(acc.id, catList.length)];
+          imgHTML = `<div class="card-image-placeholder">${emoji}</div>`;
+        }
 
         // Links
         const linksHTML = acc.links?.length
@@ -996,11 +1096,42 @@ ${imgHTML}
             <button class="btn btn-danger btn-sm" data-action="delete" data-id="${acc.id}">🗑️ Delete</button>
           </div>`;
 
-        // Bind reaction buttons
+        // Bind reaction buttons - Fix 2: immediate visual update
         c.querySelectorAll('.reaction-btn').forEach(b=>{
           b.onclick=(e)=>{
             e.stopPropagation();
-            toggleReaction(b.dataset.id, b.dataset.rx);
+            const id = b.dataset.id;
+            const rx = b.dataset.rx;
+            // Optimistic UI update
+            const accData = DATA.accomplishments.find(a=>a.id===id);
+            if (!accData) return;
+            const dev = getDeviceId();
+            const prev = MY_REACTIONS[id];
+            // Update data
+            if (prev && accData.reactions[prev]) {
+              const pi = accData.reactions[prev].indexOf(dev);
+              if (pi > -1) accData.reactions[prev].splice(pi, 1);
+            }
+            if (prev === rx) {
+              delete MY_REACTIONS[id];
+            } else {
+              if (!accData.reactions[rx]) accData.reactions[rx] = [];
+              if (!accData.reactions[rx].includes(dev)) accData.reactions[rx].push(dev);
+              MY_REACTIONS[id] = rx;
+            }
+            if (lsOk()) try { localStorage.setItem(CFG.LS_REACTIONS, JSON.stringify(MY_REACTIONS)); } catch(_) {}
+            // Update all reaction buttons in this card immediately
+            const card = b.closest('.card');
+            const myRxNow = MY_REACTIONS[id];
+            card.querySelectorAll('.reaction-btn').forEach(rb => {
+              const t = rb.dataset.rx;
+              const cnt = (accData.reactions?.[t]||[]).length;
+              rb.classList.toggle('active', myRxNow === t);
+              rb.setAttribute('aria-pressed', String(myRxNow === t));
+              rb.querySelector('.reaction-count').textContent = cnt > 0 ? cnt : '';
+            });
+            // Persist in background
+            saveData();
           };
         });
         c.querySelector('[data-action="edit"]').onclick=()=>startEdit(acc.id);
@@ -1094,13 +1225,15 @@ ${imgHTML}
       try {
         if (EDITING_ID) { await updateAccomplishment(EDITING_ID,fd); toast('Accomplishment updated! ✅','success'); }
         else            { await addAccomplishment(fd); toast('Accomplishment added! 🎉','success'); }
-        closeForm(); resetForm();
+        closeForm(); resetForm(); // Fix 8: resetForm sets EDITING_ID=null and button label to "Add"
         if (!useFirebase) refreshUI();
         document.getElementById('cards-section').scrollIntoView({behavior:'smooth'});
       } catch(err) { console.error(err); toast('Error saving','error'); }
-      finally { btn.disabled=false; btn.innerHTML='<span>✨</span> Add Accomplishment'; }
+      finally { btn.disabled=false; if(!EDITING_ID) btn.innerHTML='<span>✨</span> Add Accomplishment'; }
     }
     function startEdit(id) {
+      // Fix 7: Reset form first to clear any stale state, then populate
+      resetForm();
       const acc=DATA.accomplishments.find(a=>a.id===id);
       if (!acc) return;
       EDITING_ID=id;
@@ -1125,9 +1258,17 @@ ${imgHTML}
       if (!acc) return;
       const ok=await modal('Delete?',`Delete "${acc.title}"?`,[{label:'Cancel',value:false,class:'btn-secondary'},{label:'Delete',value:true,class:'btn-danger'}]);
       if (!ok) return;
+      // Fix 7 & 8: If we're editing this item, reset form first to avoid stale EDITING_ID
+      if (EDITING_ID===id) { closeForm(); resetForm(); }
       await deleteAccomplishment(id);
       if (!useFirebase) refreshUI();
-      toast('Deleted','success',5000,async()=>{ if(await undoDelete()){if(!useFirebase) refreshUI(); toast('Restored ✅','success');} });
+      toast('Deleted','success',5000,async()=>{
+        // Fix 8: Restore sets EDITING_ID to null so no duplication occurs
+        if(await undoDelete()){
+          if(!useFirebase) refreshUI();
+          toast('Restored ✅','success');
+        }
+      });
     }
     function addLinkField() {
       const ll=document.getElementById('form-links-list');
@@ -1146,26 +1287,44 @@ ${imgHTML}
       const prev=document.getElementById('form-image-preview');
       if (!file.type.startsWith('image/')) { err.textContent='Please select an image'; prev.style.display='none'; return; }
       if (file.size>10*1024*1024) { err.textContent='Max 10MB'; prev.style.display='none'; return; }
-      err.textContent='Compressing…';
+      err.textContent='Compression en cours…';
+      prev.style.display='none';
       try {
-        const data=await new Promise((res,rej)=>{
-          const r=new FileReader(); r.onload=e2=>{
-            const img=new Image(); img.onload=()=>{
-              const canvas=document.createElement('canvas');
-              let {width,height}=img; const max=800;
-              if(width>height&&width>max){height=height/width*max;width=max;}
-              else if(height>max){width=width/height*max;height=max;}
-              canvas.width=width; canvas.height=height;
-              canvas.getContext('2d').drawImage(img,0,0,width,height);
-              let q=0.9, d=canvas.toDataURL('image/jpeg',q);
-              while(d.length>CFG.MAX_IMG&&q>0.1){q-=0.1;d=canvas.toDataURL('image/jpeg',q);}
-              d.length>CFG.MAX_IMG?rej(new Error('Too large')):res(d);
-            }; img.src=e2.target.result;
-          }; r.readAsDataURL(file);
+        const data = await new Promise((res, rej) => {
+          const reader = new FileReader();
+          reader.onerror = () => rej(new Error('Read failed'));
+          reader.onload = (ev) => {
+            const img = new Image();
+            img.onerror = () => rej(new Error('Image load failed'));
+            img.onload = () => {
+              try {
+                const canvas = document.createElement('canvas');
+                let w = img.naturalWidth || img.width;
+                let h = img.naturalHeight || img.height;
+                const max = 800;
+                if (w > h && w > max) { h = Math.round(h / w * max); w = max; }
+                else if (h > max)     { w = Math.round(w / h * max); h = max; }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, w, h);
+                let q = 0.85;
+                let d = canvas.toDataURL('image/jpeg', q);
+                while (d.length > CFG.MAX_IMG && q > 0.1) { q -= 0.1; d = canvas.toDataURL('image/jpeg', q); }
+                if (d.length > CFG.MAX_IMG) rej(new Error('Too large'));
+                else res(d);
+              } catch(ex) { rej(ex); }
+            };
+            img.src = ev.target.result;
+          };
+          reader.readAsDataURL(file);
         });
-        prev.src=data; prev.style.display='block'; err.textContent='';
-        toast('Image ready ✅','success');
-      } catch(_) { err.textContent='Image too large, try a smaller file'; prev.style.display='none'; }
+        prev.src = data; prev.style.display = 'block'; err.textContent = '';
+        toast('Image prête ✅', 'success');
+      } catch(ex) {
+        console.error('Image error:', ex);
+        err.textContent = 'Erreur de compression – essayez un fichier plus petit';
+        prev.style.display = 'none';
+      }
     }
 
     function updateCharCount(name) {
@@ -1290,6 +1449,8 @@ ${imgHTML}
           if(raw){ const p=JSON.parse(raw); if(validData(p)) DATA=p; }
         } catch(_) {}
       }
+      // Fix 1: Always ensure default categories exist
+      CFG.DEFAULT_CATEGORIES.forEach(cat=>{ if(!DATA.categories.includes(cat)) DATA.categories.push(cat); });
       refreshUI();
       const banner=document.getElementById('storage-warning');
       const txt=document.getElementById('storage-warning-text');
@@ -1307,6 +1468,8 @@ ${imgHTML}
       if (useFirebase) {
         onValue(ref(db,'clindoc/data'), snapshot=>{
           DATA=fromFirebase(snapshot.val());
+          // Fix 1: Always ensure default categories exist
+          CFG.DEFAULT_CATEGORIES.forEach(cat=>{ if(!DATA.categories.includes(cat)) DATA.categories.push(cat); });
           refreshUI();
         }, err=>{
           console.error('Firebase error:',err);
